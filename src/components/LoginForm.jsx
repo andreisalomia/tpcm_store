@@ -44,16 +44,16 @@ function LoginForm({ onLogin }) {
       <div className="row w-100">
         <div className="col-md-4 offset-md-4">
           <div className="card shadow-lg bg-black text-light border-0 position-relative">
-            
+
             <img
               src="/orange_logo.jpg"
               alt="Orange Logo"
               className="position-absolute"
-              style={{ 
-                top: '15px', 
-                left: '15px', 
-                width: '70px', 
-                height: '70px', 
+              style={{
+                top: '15px',
+                left: '15px',
+                width: '70px',
+                height: '70px',
                 objectFit: 'contain',
                 zIndex: 10
               }}
