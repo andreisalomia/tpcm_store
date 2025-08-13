@@ -16,7 +16,7 @@ function PurchaseModal({ item, user, onClose, onSuccess }) {
       const requestResponse = await transactionApi.requestTransaction(
         user.msisdn,
         item.price,
-        1
+        21
       );
 
       setTransaction(requestResponse);

@@ -14,7 +14,7 @@ const tpcmApi = axios.create({
 });
 
 export const transactionApi = {
-  requestTransaction: async (msisdn, amount, thirdPartyId = 1) => {
+  requestTransaction: async (msisdn, amount, thirdPartyId = 21) => {
     try {
       const response = await tpcmApi.post('/transactions/flow/request', {
         msisdn,
