@@ -1,40 +1,123 @@
+import axios from 'axios';
+
+const API_BASE_URL = process.env.REACT_APP_AUTH_API_URL || 'http://localhost:3001/api/auth';
+
 const authUtils = {
-  hashPassword(password, msisdn) {
-    const salt = msisdn.slice(-4);
-    return btoa(password + salt);
-  },
+  api: axios.create({
+    baseURL: API_BASE_URL,
+    headers: { 'Content-Type': 'application/json' },
+  }),
 
-  storePassword(msisdn, password) {
-    const passwords = JSON.parse(localStorage.getItem('tpcm_passwords') || '{}');
-    passwords[msisdn] = this.hashPassword(password, msisdn);
-    localStorage.setItem('tpcm_passwords', JSON.stringify(passwords));
-  },
-
-  hasPassword(msisdn) {
-    const passwords = JSON.parse(localStorage.getItem('tpcm_passwords') || '{}');
-    return passwords.hasOwnProperty(msisdn);
-  },
-
-  verifyPassword(msisdn, password) {
-    const passwords = JSON.parse(localStorage.getItem('tpcm_passwords') || '{}');
-    const storedHash = passwords[msisdn];
-    const inputHash = this.hashPassword(password, msisdn);
-    return storedHash === inputHash;
-  },
-
-  resetPassword(msisdn) {
-    const passwords = JSON.parse(localStorage.getItem('tpcm_passwords') || '{}');
-    if (passwords[msisdn]) {
-      delete passwords[msisdn];
-      localStorage.setItem('tpcm_passwords', JSON.stringify(passwords));
-      return true;
+  setAuthToken(token) {
+    if (token) {
+      this.api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      localStorage.setItem('tpcm_token', token);
+    } else {
+      delete this.api.defaults.headers.common['Authorization'];
+      localStorage.removeItem('tpcm_token');
     }
-    return false;
+  },
+
+  getToken() {
+    return localStorage.getItem('tpcm_token');
+  },
+
+  initializeAuth() {
+    const token = this.getToken();
+    if (token) {
+      this.setAuthToken(token);
+    }
+  },
+
+  async register(msisdn, password, email) {
+    try {
+      const response = await this.api.post('/register', {
+        msisdn,
+        password,
+        email
+      });
+
+      if (response.data.success) {
+        this.setAuthToken(response.data.token);
+        const userData = {
+          ...response.data.user,
+          loginTime: new Date().toISOString(),
+          authenticated: true
+        };
+        localStorage.setItem('tpcm_user', JSON.stringify(userData));
+        return { success: true, userData };
+      }
+
+      throw new Error(response.data.error || 'Registration failed');
+    } catch (error) {
+      throw new Error(error.response?.data?.error || error.message || 'Registration failed');
+    }
+  },
+
+  async login(msisdn, password) {
+    try {
+      const response = await this.api.post('/login', {
+        msisdn,
+        password
+      });
+
+      if (response.data.success) {
+        this.setAuthToken(response.data.token);
+        const userData = {
+          ...response.data.user,
+          loginTime: new Date().toISOString(),
+          authenticated: true
+        };
+        localStorage.setItem('tpcm_user', JSON.stringify(userData));
+        return { success: true, userData };
+      }
+
+      throw new Error(response.data.error || 'Login failed');
+    } catch (error) {
+      throw new Error(error.response?.data?.error || error.message || 'Login failed');
+    }
+  },
+
+  async resetPassword(email, newPassword) {
+    try {
+      const response = await this.api.post('/reset-password', {
+        email,
+        newPassword
+      });
+
+      if (response.data.success) {
+        return response.data;
+      }
+
+      throw new Error(response.data.error || 'Password reset failed');
+    } catch (error) {
+      throw new Error(error.response?.data?.error || error.message || 'Password reset failed');
+    }
+  },
+
+  async verifyToken() {
+    try {
+      const response = await this.api.get('/verify');
+      if (response.data.valid) {
+        const userData = {
+          ...response.data.user,
+          loginTime: new Date().toISOString(),
+          authenticated: true
+        };
+        localStorage.setItem('tpcm_user', JSON.stringify(userData));
+        return userData;
+      }
+      throw new Error('Token invalid');
+    } catch (error) {
+      this.logout();
+      throw error;
+    }
   },
 
   isAuthenticated() {
     const user = localStorage.getItem('tpcm_user');
-    return user && JSON.parse(user).authenticated;
+    const token = this.getToken();
+    return !!(user && token && JSON.parse(user).authenticated);
   },
 
   getCurrentUser() {
@@ -42,58 +125,12 @@ const authUtils = {
     return userData ? JSON.parse(userData) : null;
   },
 
-  async login(msisdn, password, subscriberValidationFn) {
-    const subscriber = await subscriberValidationFn(msisdn);
-    
-    if (!this.hasPassword(msisdn)) {
-      return { needsPasswordSetup: true, subscriber };
-    }
-
-    if (!this.verifyPassword(msisdn, password)) {
-      throw new Error('Invalid password');
-    }
-
-    const userData = {
-      msisdn: subscriber.msisdn,
-      subscriberID: subscriber.subscriberID,
-      customerID: subscriber.customer?.customerID,
-      customerName: subscriber.customer?.name,
-      status: subscriber.status,
-      subscriptionType: subscriber.subscriptionType,
-      loginTime: new Date().toISOString(),
-      authenticated: true
-    };
-
-    localStorage.setItem('tpcm_user', JSON.stringify(userData));
-    return { success: true, userData };
-  },
-
-  async setupPassword(msisdn, password, subscriberValidationFn) {
-    const subscriber = await subscriberValidationFn(msisdn);
-    
-    if (password.length < 6) {
-      throw new Error('Password must be at least 6 characters');
-    }
-
-    this.storePassword(msisdn, password);
-    const userData = {
-      msisdn: subscriber.msisdn,
-      subscriberID: subscriber.subscriberID,
-      customerID: subscriber.customer?.customerID,
-      customerName: subscriber.customer?.name,
-      status: subscriber.status,
-      subscriptionType: subscriber.subscriptionType,
-      loginTime: new Date().toISOString(),
-      authenticated: true
-    };
-
-    localStorage.setItem('tpcm_user', JSON.stringify(userData));
-    return { success: true, userData };
-  },
-
   logout() {
+    this.setAuthToken(null);
     localStorage.removeItem('tpcm_user');
   }
 };
+
+authUtils.initializeAuth();
 
 export default authUtils;
